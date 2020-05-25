@@ -1,2 +1,33 @@
 #+TITLE: optic-model
-Modeling of optical systems, mostly focused on telescopes
+* Overview
+optic-model is for modeling optical systems, with a focus on telescopes.
+
+This is a personal project meant to satisfy curiosity and is still in
+an early stage.  In particular, the "input" is changed by editing code,
+and the output is cryptic.
+ 
+Currently, it can model telescopes that are composed solely of reflectors
+where the reflectors are quadric surfaces (which includes spherical, parabolic,
+hyperbolic, and elliptical, in particular).  It has models of Newtonian,
+classical Cassegrain, and Ritchey-Chrétien scopes.  Refractive elements are
+a next step.
+
+The primary design goal is to help understand the various kinds of aberrations
+that different designs have.  In particular, the model is non-physical in that
+we pretend rays can pass through the secondary reflector on their way to the
+primary reflector.
+
+* Design
+The design is very similar to a ray tracer, except that:
+- We trace rays from the source to a sensor rather than casting rays from
+ a point-like camera.
+- Whereas a ray tracer has to worry about what object in the scene a particular
+ ray intersects, we assume a prescribed order in which elements are reached (e.g.,
+ primary reflector, secondary reflector, then sensor).
+- The output is not an image of a scene.  Or, more properly, it's a lot like an image of
+ a scene, except that the scene is just a few infinitely distant point sources.
+- We care about certain things that a ray tracer doesn't care about, like the relative
+ phase of the rays when the reach the sensor.
+
+
+
