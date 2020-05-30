@@ -78,7 +78,17 @@ class BoundVector():
     tangent bundle of R^3"""
     # TODO: v_q is so ugly.
     def __init__(self, v_q):
-        pass
+        self.v_q = v_q
+
+    def q(self):
+        return self.v_q[:,1]
+
+    def v(self):
+        return self.v_q[:,0]
+
+def make_bound_vector(q, v):
+    v_q = np.stack([v, q], axis=1)
+    return BoundVector(v_q)
 
 # TODO: Pull a lot of what's in Ray into BoundVector and have Ray derive BoundVector.
 class Ray():
@@ -188,7 +198,7 @@ class OrientedSurface():
     def inside(self, point):
         raise NotImplementedError("child must implement inside")
 
-    def reflect(self, ray):
+    def reflect_deprecated(self, ray):
         t = self.intersect(ray)
         if t is None:
             return None
@@ -206,7 +216,7 @@ class OrientedSurface():
         new_v_q = np.stack([reflected_v, new_q], axis=1)
         return Ray(new_v_q, phase, ray.annotations)
 
-    def interact(self, ray):
+    def interact_deprecated(self, ray):
         """Compute reflected/transmitted ray"""
         if self.ior is None:
             return self.reflect(ray)
@@ -226,7 +236,7 @@ class OrientedSurface():
 # direction of the surface normals is flaky--a ray in a weird place could be treated
 # as intersecting the wrong sheet rather than missing.
 class Quadric(OrientedSurface):
-    def __init__(self, M, ior=None):
+    def __init__(self, M):
         """Quadric surface defined by 0.5 v' M v = 0 where v is in
         homogeneous coordinates.  M should be symmetric.
 
@@ -243,10 +253,9 @@ class Quadric(OrientedSurface):
         see what portions were chopped off.)
         """
         self.M = M
-        self.ior = ior
 
     def __str__(self):
-        return f"{self.M} (ior={self.ior})"
+        return f"{self.M}"
 
     def intersect(self, ray):
         """Position is [v,q] * [t;1]...
@@ -276,9 +285,12 @@ class Quadric(OrientedSurface):
         result[3] = 0
         return result
 
+    def inside(self, q):
+        return q.dot(self.M).dot(q) <= 0.
+
     def untransform(self, A):
         """Apply inverse of A to the quadric."""
-        return Quadric(A.T.dot(self.M).dot(A), self.ior)
+        return Quadric(A.T.dot(self.M).dot(A))
 
 class Plane(OrientedSurface):
     # TODO: Even though we have the same amount of information as a bound vector,
@@ -312,91 +324,38 @@ class Plane(OrientedSurface):
     def inside(self, q):
         return (q - self.bound_vector.q()).dot(self.bound_vector.v())
 
-# TODO: Add fraction of light that is absorbed/transmitted.  For simplicity, that
-# will just be a constant; for now, that constant is implicitly 1 everywhere.
-# TODO: How should coming out the back of a lens work?  In particular, how does
-# it know what the IOR of the outside space is (unless we assume some
-# baseline)?  Should we actually think of it as not exiting a solid, but as
-# entering a different solid whose ior is the ior of the air?  That might seem silly
-# physically but I think it works well mathematically (although it means that
-# lenses have a direction--weird in general but not weird in the way we're modeling
-# these optical systems as having a prescribed order in which you hit stuff).
-# It will also work well for systems where two lenses are flush with each other
-# so you're exiting one element just as you're entering another; thinking these
-# two lenses as being comprised of 3 SubElements (the front of the first lens,
-# the interface between the two lenses, and the back of the second lens) works
-# well; what would the "inside" of that second SubElement be?
-class SubElement():
-    """A SubElement might be a reflector, or *one* side of a lens."""
-    def __init__(self, geometry, clip=None, ior=None):
-        """
-        Args:
-            geometry: the actual geometry of the surface (e.g., the sphere it's a part of)
-            clip: something with an `inside` method that can be used to test whether a
-             proposed intersection point actually hits this object.
-            ior: index of refraction (None for a reflector)
-        """
-        self.geometry = geometry
-        self.clip = clip
-        self.ior = ior
-
-    def intersect(self, ray):
-        # TODO: intersect in geometry needs to be refactored either to take in `clip`
-        # or to return all intersections.
-        pass
+def reflect(v, grad):
+    v_dot_grad = v.dot(grad)
+    # assert v_dot_grad < 0, "thought gradient pointed towards us" --obsolete
+    # To reflect, we subtract twice the projection onto grad.
+    p_v_onto_grad = (v_dot_grad / grad.dot(grad)) * grad
+    new_v = v - 2 * p_v_onto_grad
+    return new_v
 
 
-    def reflect(self, new_q, v, grad):
-        v_dot_grad = v.dot(grad)
-        assert v_dot_grad < 0, "thought gradient pointed towards us"
-        # To reflect, we subtract twice the projection onto grad.
-        p_v_onto_grad = (v_dot_grad / grad.dot(grad)) * grad
-        new_v = v - 2 * p_v_onto_grad
-        return new_v
+def refract(v, grad, ior):
+    """
+    Given point q on surface and velocity v of incoming ray, compute outgoing
+    velocity.
 
-    def refract(self, q, v, grad):
-        """
-        Given point q on surface and velocity v of incoming ray, compute outgoing
-        velocity.
+    The outgoing velocity will have magnitude self.ior.
 
-        The outgoing velocity will have magnitude self.ior.
-
-        Args:
-            q: intersection point
-            v: ray's velocity at intersection point
-            grad: surface normal, not necessarily normalized
-        """
-        # We follow notation of https://en.wikipedia.org/wiki/Snell%27s_law
-        n1 = LA.norm(v)
-        n2 = self.ior
-        r = n1 / n2
-        ell = v / n1
-        n = grad / LA.norm(grad)
-        # Do we want to negate n if its dot product with ell is positive?
-        # Or do we assume things are set up so that this doesn't happen?
-        c = - (n.dot(l))
-        if c < 0:
-            c = -c
-            n = -n
-        v_refract = r * ell + (r * c - np.sqrt(1 - r * r * (1 - c * c))) * n
-        return v_refract * n2
-
-    def interact(self, ray):
-        """Compute reflected/transmitted ray"""
-        t = self.intersect(ray)
-        if t is None:
-            return None
-        R = ray.v_q
-        new_q = R[:,0] * t + R[:,1]
-        phase = ray.phase + t
-        grad = self.grad(new_q)
-        v = R[:,0]
-
-        if self.ior is None:
-            new_v = self.reflect(new_q, v, grad)
-        else:
-            new_v = self.refract(new_q, v, grad)
-        assert new_v[3] == 0., f"bad reflection/refraction {new_v} (not vector-like); v={v}; grad={grad}"
-        new_v_q = np.stack([new_v, new_q], axis=1)
-        return Ray(new_v_q, phase, ray.annotations)
+    Args:
+        v: ray's velocity at intersection point
+        grad: surface normal, not necessarily normalized
+    """
+    # We follow notation of https://en.wikipedia.org/wiki/Snell%27s_law
+    n1 = LA.norm(v)
+    n2 = ior
+    r = n1 / n2
+    ell = v / n1
+    n = grad / LA.norm(grad)
+    # Do we want to negate n if its dot product with ell is positive?
+    # Or do we assume things are set up so that this doesn't happen?
+    c = - (n.dot(l))
+    if c < 0:
+        c = -c
+        n = -n
+    v_refract = r * ell + (r * c - np.sqrt(1 - r * r * (1 - c * c))) * n
+    return v_refract * n2
 

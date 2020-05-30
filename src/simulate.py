@@ -6,7 +6,9 @@ This is vaguely like a ray tracer, but:
 - We track phase information (and maybe more stuff later).
 - We trace from origin to a detector.
 
-Units are generally meters, though currently it doesn't matter--they're just abstract distance units.
+For consistency, distances are measured in meters throughout -- even wavelengths.
+(Exception: Coefficients for the Sellmeier equation use squared microns because that's what
+you'll find in tables.)
 
 Instruments generally point in direction of positive z-axis.
 
@@ -26,7 +28,8 @@ from matplotlib.collections import LineCollection
 #import sys
 
 from common import *
-from geometry import Quadric, Ray, translation3f, point, vector, cross, ii, jj, kk, make_rotation_y
+from geometry import Ray, Quadric, Plane, translation3f, point, vector, cross, ii, jj, kk, make_rotation_y, make_bound_vector
+from elements import SubElement
 
 inch = 0.0254
 mm = 1e-3
@@ -211,7 +214,7 @@ class Instrument():
                 #caught.append(None)
         return caught, pairs
 
-def make_paraboloid(focal_length, ior=None):
+def make_paraboloid(focal_length, material=None):
     """
     A parabolic reflect with back of the reflector at (0,0,0), with normal (0,0,1).
     Focal point is (0,0,focal_length).
@@ -235,13 +238,15 @@ def make_paraboloid(focal_length, ior=None):
     M[1,1] = -1
     M[2,3] = 2 * focal_length
     M[3,2] = M[2,3]
-    return Quadric(M, ior=ior)
+    geometry = Quadric(M)
+    return SubElement(geometry, material=material)
 
-# TODO: Should make_paraboloid and make_hyperboloid be class functions of Quadric?
+# TODO: Should make_paraboloid and make_hyperboloid be class functions of Quadric?  No, because
+# Quadric represents the entire conic and has no material.
 # TODO: Does the following just do the right thing for other conics, not just
 # hyperboloids?  If so, change name to make_conic?
 # TODO: Our convention for using normals to determine which surface you hit is kind of annoying...
-def make_hyperboloid(R, K, z_offset, ior=None, reverse_normal=False):
+def make_hyperboloid(R, K, z_offset, material=None, reverse_normal=False):
     """
     See https://en.wikipedia.org/wiki/Conic_constant
 
@@ -262,8 +267,19 @@ def make_hyperboloid(R, K, z_offset, ior=None, reverse_normal=False):
         M *= -1
     if reverse_normal:
         M *= -1
-    quad = Quadric(M, ior=ior)
-    return quad.untransform(translation3f(0,0,-z_offset))
+    quad = Quadric(M)
+    geometry = quad.untransform(translation3f(0,0,-z_offset))
+    if R > 0:
+        # We want to keep the top sheet.
+        # TODO: Let clip_z be halfway between the two foci.
+        clip_z = z_offset - 1e-6
+        clip = Plane(make_bound_vector(point(0, 0, clip_z), vector(0, 0, -1)))
+    else:
+        clip_z = z_offset + 1e-6
+        clip = Plane(make_bound_vector(point(0, 0, clip_z), vector(0, 0, 1)))
+    # TODO: emulate ocaml's ?foo:bar (i.e., don't override default if value is None)
+    return SubElement(geometry, clip, material=material)
+
 
 def standard_source(z, radius):
     """A source pointing "down" from (0,0,z) with given radius"""
@@ -354,8 +370,9 @@ def make_classical_cassegrain(focal_length, d, b, aperture_radius, setback=0.):
     beta2 = c ** 2 - a ** 2
 
     translated_secondary_M = np.diag([1/beta2, 1/beta2, -1/(a**2), 1])
-    translated_secondary = Quadric(translated_secondary_M, ior=None)
-    secondary = translated_secondary.untransform(translation3f(0,0,-s))
+    translated_secondary_geometry = Quadric(translated_secondary_M)
+    secondary_geometry = translated_secondary_geometry.untransform(translation3f(0,0,-s))
+    secondary = SubElement(secondary_geometry, clip=None)
     primary = make_paraboloid(f1)
     aperture0 = CircularAperture(point(0,0,d), vector(0,0,-aperture_radius))
     # Reflector is z = r^2 / (4 focal length), so at edge,
