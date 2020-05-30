@@ -27,7 +27,7 @@ The design is very similar to a ray tracer, except that:
 - The output is not an image of a scene.  Or, more properly, it's a lot like an image of
  a scene, except that the scene is just a few infinitely distant point sources.
 - We care about certain things that a ray tracer doesn't care about, like the relative
- phase of the rays when the reach the sensor.
+ phase of the rays when they reach the sensor.
 
 
 
