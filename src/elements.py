@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
-from geometry import reflect, refract, Ray
+import numpy as np
+from geometry import reflect, refract, Ray, Quadric, Plane, translation3f, make_bound_vector, point, vector
 from material import *
 
 nm = 1e-9
@@ -71,3 +72,48 @@ class SubElement():
         assert new_v[3] == 0., f"bad reflection/refraction {new_v} (not vector-like); v={v}; grad={grad}"
         new_v_q = np.stack([new_v, new_q], axis=1)
         return Ray(new_v_q, phase, ray.annotations)
+
+# TODO: Should make_paraboloid and make_hyperboloid be class functions of Quadric?  No, because
+# Quadric represents the entire conic and has no material.
+# TODO: Does the following just do the right thing for other conics, not just
+# hyperboloids?  If so, change name to make_conic?
+# TODO: Our convention for using normals to determine which surface you hit is kind of annoying...
+def make_hyperboloid(R, K, z_offset, material=None, reverse_normal=False):
+    """
+    See https://en.wikipedia.org/wiki/Conic_constant
+
+    r^2 - 2Rz + (K+1)z^2 = 0
+
+    Note that in optics there seem to be some unfortunate inconsistencies about sign conventions
+    for radius of curvature.  In some places, R > 0 is concave "up" while in some places R < 0
+    is concave up.  In particular, https://en.wikipedia.org/wiki/Lens#Lensmaker's_equation has
+    the reverse of our sign convention.
+
+    Args:
+        R: radius of curvature; use R > 0 for concave "up" (direction of positive z-axis) while R < 0
+        is concave "down"
+        K: conic constant, should be < -1 for hyperboloids
+    """
+    M = np.diag([1, 1, (K+1), 0])
+    M[2,3] = -R
+    M[3,2] = M[2,3]
+    # For either sign of R, we want the convention that gradient points up at origin.
+    # That gradient is (0,0,-R).
+    # When R < 0, we already have that.
+    # For R > 0, we need to negate M to get that
+    if R > 0:
+        M *= -1
+    if reverse_normal:
+        M *= -1
+    quad = Quadric(M)
+    geometry = quad.untransform(translation3f(0,0,-z_offset))
+    if R > 0:
+        # We want to keep the top sheet.
+        # TODO: Let clip_z be halfway between the two foci.
+        clip_z = z_offset - 1e-6
+        clip = Plane(make_bound_vector(point(0, 0, clip_z), vector(0, 0, -1)))
+    else:
+        clip_z = z_offset + 1e-6
+        clip = Plane(make_bound_vector(point(0, 0, clip_z), vector(0, 0, 1)))
+    # TODO: emulate ocaml's ?foo:bar (i.e., don't override default if value is None)
+    return SubElement(geometry, clip, material=material)

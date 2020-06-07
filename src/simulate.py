@@ -29,7 +29,7 @@ from matplotlib.collections import LineCollection
 
 from common import *
 from geometry import Ray, Quadric, Plane, translation3f, point, vector, cross, ii, jj, kk, make_rotation_y, make_bound_vector
-from elements import SubElement
+from elements import SubElement, make_hyperboloid
 
 inch = 0.0254
 mm = 1e-3
@@ -240,45 +240,6 @@ def make_paraboloid(focal_length, material=None):
     M[3,2] = M[2,3]
     geometry = Quadric(M)
     return SubElement(geometry, material=material)
-
-# TODO: Should make_paraboloid and make_hyperboloid be class functions of Quadric?  No, because
-# Quadric represents the entire conic and has no material.
-# TODO: Does the following just do the right thing for other conics, not just
-# hyperboloids?  If so, change name to make_conic?
-# TODO: Our convention for using normals to determine which surface you hit is kind of annoying...
-def make_hyperboloid(R, K, z_offset, material=None, reverse_normal=False):
-    """
-    See https://en.wikipedia.org/wiki/Conic_constant
-
-    r^2 - 2Rz + (K+1)z^2 = 0
-
-    Args:
-        R: radius of curvature; use R > 0 for concave "up" while R < 0 is concave "down"
-        K: conic constant, should be < -1 for hyperboloids
-    """
-    M = np.diag([1, 1, (K+1), 0])
-    M[2,3] = -R
-    M[3,2] = M[2,3]
-    # For either sign of R, we want the convention that gradient points up at origin.
-    # That gradient is (0,0,-R).
-    # When R < 0, we already have that.
-    # For R > 0, we need to negate M to get that
-    if R > 0:
-        M *= -1
-    if reverse_normal:
-        M *= -1
-    quad = Quadric(M)
-    geometry = quad.untransform(translation3f(0,0,-z_offset))
-    if R > 0:
-        # We want to keep the top sheet.
-        # TODO: Let clip_z be halfway between the two foci.
-        clip_z = z_offset - 1e-6
-        clip = Plane(make_bound_vector(point(0, 0, clip_z), vector(0, 0, -1)))
-    else:
-        clip_z = z_offset + 1e-6
-        clip = Plane(make_bound_vector(point(0, 0, clip_z), vector(0, 0, 1)))
-    # TODO: emulate ocaml's ?foo:bar (i.e., don't override default if value is None)
-    return SubElement(geometry, clip, material=material)
 
 
 def standard_source(z, radius):
