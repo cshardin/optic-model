@@ -6,7 +6,9 @@ from material import *
 
 nm = 1e-9
 
+blue = 450 * nm
 green = 550 * nm
+red = 650 * nm
 
 # TODO: Add fraction of light that is absorbed/transmitted.  For simplicity, that
 # will just be a constant; for now, that constant is implicitly 1 everywhere.
@@ -84,10 +86,9 @@ def make_hyperboloid(R, K, z_offset, material=None, reverse_normal=False):
 
     r^2 - 2Rz + (K+1)z^2 = 0
 
-    Note that in optics there seem to be some unfortunate inconsistencies about sign conventions
-    for radius of curvature.  In some places, R > 0 is concave "up" while in some places R < 0
-    is concave up.  In particular, https://en.wikipedia.org/wiki/Lens#Lensmaker's_equation has
-    the reverse of our sign convention.
+    Be careful about the sign convention for radius of curvature.  We follow the convention
+    in https://en.wikipedia.org/wiki/Conic_constant but this is opposite the convention in
+    https://en.wikipedia.org/wiki/Lens#Lensmaker's_equation .
 
     Args:
         R: radius of curvature; use R > 0 for concave "up" (direction of positive z-axis) while R < 0
@@ -117,3 +118,19 @@ def make_hyperboloid(R, K, z_offset, material=None, reverse_normal=False):
         clip = Plane(make_bound_vector(point(0, 0, clip_z), vector(0, 0, 1)))
     # TODO: emulate ocaml's ?foo:bar (i.e., don't override default if value is None)
     return SubElement(geometry, clip, material=material)
+
+def make_lens(R1, R2, d, material=None):
+    """
+    The resulting lens faces in direction of positive z-axis unless reverse_normal=True.
+
+    The sign convention here is as in https://en.wikipedia.org/wiki/Lens#Lensmaker's_equation .
+    Careful: This is the opposite as above.
+
+    The default material is BK7.
+
+    The lensmaker's equation:
+    1/f = (n - 1)*[1/R1 - 1/R2 + (n-1)*d/(n * R1 * R2)]
+    """
+    if material is None:
+        material=BK7
+    assert False, "not yet implemented"

@@ -400,6 +400,12 @@ def make_ritchey_chretien(focal_length, D, b, aperture_radius, setback=0.):
     sensor = PlanarSensor(point(0,0,-b - setback), vector(1,0,0), vector(0,1,0))
     return Instrument(source, elements, sensor)
 
+def make_maksutov():
+    """Maksutov
+    """
+    # See https://www.cfht.hawaii.edu/~baril/Maksutov/Maksutov.html
+    assert False, "Not yet implemented"
+
 def plot_segments(ax, points, pairs):
     use_lines = False
     use_lines = True
