@@ -78,6 +78,26 @@ class SubElement():
         new_v_q = np.stack([new_v, new_q], axis=1)
         return Ray(new_v_q, phase, ray.annotations)
 
+class Compound():
+    """Just a bunch of elements sequentially"""
+    def __init__(self, elements):
+        self.elements = elements
+
+    def interact(self, ray):
+        debug = True
+        if debug:
+            print(f"interact got ray {ray.v_q}")
+        for index, elt in enumerate(self.elements):
+            ray = elt.interact(ray)
+            if debug:
+                if ray is not None:
+                    print(f"{index}: {ray.v_q}")
+                else:
+                    print(f"{index}: {ray}")
+            if ray is None:
+                return None
+        return ray
+
 # TODO: Should make_paraboloid and make_hyperboloid be class functions of Quadric?  No, because
 # Quadric represents the entire conic and has no material.
 # TODO: Does the following just do the right thing for other conics, not just
@@ -152,4 +172,4 @@ def make_lens(R1, R2, d, z_offset, material=None, external_material=None):
     # TODO: worry where the two surfaces meet and introduce appropriate clipping
     element1 = SubElement(sphere1, None, material=material)
     element2 = SubElement(sphere2, None, material=external_material)
-    assert False, "not yet implemented"
+    return Compound([element1, element2])

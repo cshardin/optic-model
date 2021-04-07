@@ -29,7 +29,7 @@ from matplotlib.collections import LineCollection
 
 from common import *
 from geometry import Ray, Quadric, Plane, translation3f, point, vector, cross, ii, jj, kk, make_rotation_y, make_bound_vector
-from elements import SubElement, make_hyperboloid
+from elements import SubElement, Compound, make_hyperboloid
 
 inch = 0.0254
 mm = 1e-3
@@ -50,26 +50,6 @@ class CircularAperture():
         # block a photon that is already past it (b/c the way we're using it, that's just because we
         # didn't bother to make the photon start farther back).
         # TODO: implement properly; for now we just never absorb
-        return ray
-
-class Compound():
-    """Just a bunch of elements sequentially"""
-    def __init__(self, elements):
-        self.elements = elements
-
-    def interact(self, ray):
-        debug = True
-        if debug:
-            print(f"interact got ray {ray.v_q}")
-        for index, elt in enumerate(self.elements):
-            ray = elt.interact(ray)
-            if debug:
-                if ray is not None:
-                    print(f"{index}: {ray.v_q}")
-                else:
-                    print(f"{index}: {ray}")
-            if ray is None:
-                return None
         return ray
 
 class CircularSource():

@@ -349,7 +349,7 @@ def refract(v, grad, ior):
     Given point q on surface and velocity v of incoming ray, compute outgoing
     velocity.
 
-    The outgoing velocity will have magnitude self.ior.
+    The outgoing velocity will have magnitude 1/ior.
 
     Args:
         v: ray's velocity at intersection point
@@ -357,7 +357,7 @@ def refract(v, grad, ior):
     """
     # We follow notation of https://en.wikipedia.org/wiki/Snell%27s_law
     n1 = LA.norm(v)
-    n2 = ior
+    n2 = 1/ior
     r = n1 / n2
     ell = v / n1
     n = grad / LA.norm(grad)
