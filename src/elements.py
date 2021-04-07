@@ -24,6 +24,9 @@ red = 650 * nm
 # two lenses as being comprised of 3 SubElements (the front of the first lens,
 # the interface between the two lenses, and the back of the second lens) works
 # well; what would the "inside" of that second SubElement be otherwise?
+# I think the material should be the material we are going /to/, and the
+# incoming ray should already have a speed based on the medium it is in.
+# (Rays should know their own speed so that we track phase correctly.)
 class SubElement():
     """A SubElement might be a reflector, or *one* side of a lens."""
     def __init__(self, geometry, clip=None, material=None):
@@ -119,18 +122,34 @@ def make_hyperboloid(R, K, z_offset, material=None, reverse_normal=False):
     # TODO: emulate ocaml's ?foo:bar (i.e., don't override default if value is None)
     return SubElement(geometry, clip, material=material)
 
-def make_lens(R1, R2, d, material=None):
+def make_lens(R1, R2, d, z_offset, material=None, external_material=None):
     """
-    The resulting lens faces in direction of positive z-axis unless reverse_normal=True.
+    The resulting lens faces in direction of positive z-axis.
 
     The sign convention here is as in https://en.wikipedia.org/wiki/Lens#Lensmaker's_equation .
+    That is:
+    - R1 is curvature of lens closer to source (larger z).
+    - R > 0 means center of curvature is at more negative z (farther along in path of light).
+    - So for a common convex lens, R1 > 0 and R2 < 0.
     Careful: This is the opposite as above.
+
+    The z-axis intersects first surface at z = z_offset + d/2 and the 2nd surface at z = z_offset - d/2.
 
     The default material is BK7.
 
     The lensmaker's equation:
     1/f = (n - 1)*[1/R1 - 1/R2 + (n-1)*d/(n * R1 * R2)]
     """
+    # We handle defaults this way so that if None is passed we can fill in the default.
     if material is None:
-        material=BK7
+        material = BK7
+    if external_material is None:
+        external_material = air
+    center1 = z_offset + d/2 - R1
+    center2 = z_offset - d/2 - R2
+    sphere1 = Quadric.sphere(R1).untransform(translation3f(0,0,-center1))
+    sphere2 = Quadric.sphere(R2).untransform(translation3f(0,0,-center2))
+    # TODO: worry where the two surfaces meet and introduce appropriate clipping
+    element1 = SubElement(sphere1, None, material=material)
+    element2 = SubElement(sphere2, None, material=external_material)
     assert False, "not yet implemented"

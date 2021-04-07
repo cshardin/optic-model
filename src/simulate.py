@@ -243,7 +243,7 @@ def make_paraboloid(focal_length, material=None):
 
 
 def standard_source(z, radius):
-    """A source pointing "down" from (0,0,z) with given radius"""
+    """A source pointing "down" (direction of rays is (0,0,-1)) from (0,0,z) with given radius"""
     debug = False
     if debug:
        return LinearSource(radius, z)

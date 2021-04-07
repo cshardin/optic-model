@@ -292,6 +292,15 @@ class Quadric(OrientedSurface):
         """Apply inverse of A to the quadric."""
         return Quadric(A.T.dot(self.M).dot(A))
 
+    @staticmethod
+    def sphere(radius):
+        """Negative radius yields sphere with normal pointing inward"""
+        M = np.diag([1., 1., 1., -(radius ** 2)])
+        if radius < 0:
+            M *= -1
+        return Quadric(M)
+
+
 class Plane(OrientedSurface):
     # TODO: Even though we have the same amount of information as a bound vector,
     # it's not obvious that this fact is useful (unless there's some basic operation
@@ -333,6 +342,8 @@ def reflect(v, grad):
     return new_v
 
 
+# TODO: "The outgoing velocity will have magnitude self.ior"  I think we are
+# using ior in some places where we want 1/ior.  Recall that ior = 4 means 1/4 speed of light.
 def refract(v, grad, ior):
     """
     Given point q on surface and velocity v of incoming ray, compute outgoing
