@@ -159,10 +159,11 @@ def make_lens(R1, R2, d, z_offset, material=None, external_material=None):
 
     The lensmaker's equation:
     1/f = (n - 1)*[1/R1 - 1/R2 + (n-1)*d/(n * R1 * R2)]
+    (n = ior)
     """
     # We handle defaults this way so that if None is passed we can fill in the default.
     if material is None:
-        material = BK7
+        material = bk7
     if external_material is None:
         external_material = air
     center1 = z_offset + d/2 - R1
@@ -173,3 +174,43 @@ def make_lens(R1, R2, d, z_offset, material=None, external_material=None):
     element1 = SubElement(sphere1, None, material=material)
     element2 = SubElement(sphere2, None, material=external_material)
     return Compound([element1, element2])
+
+def get_focal_length(R1, R2, d, n):
+    one_over_f = (n - 1) * (1/R1 - 1/R2 + (n-1)*d/(n * R1 * R2))
+    return 1 / one_over_f
+
+def make_lens_basic(f, d, z_offset):
+    """Assume BK7 and green light, with R2 = -R1.
+
+    We have
+    1/f = (n - 1)*[1/R1 - 1/R2 + (n-1)*d/(n * R1 * R2)]
+     = (n - 1) * [2/R1 - (n-1)*d/(n * R1^2)]
+    R1^2 = f * (n - 1) * [2*R1 - (n-1)*d / n]
+    R1^2 - f * (n - 1) * 2 * R1 + f d (n-1)^2/n = 0
+
+    R1 = [2 f (n - 1) +- sqrt(...)]/2
+
+    It seems weird that we'd get two values of R1 leading to same focal length.  Anyway, the one
+    with -sqrt comes out very small in the examples I tried, so I guess would correspond to the light
+    crossing over the center axis inside the lense.
+    """
+    material = bk7
+    wavelength = green
+    n = material.get_ior(wavelength)
+    a = 1.
+    b = -f * (n - 1) * 2
+    c = f * d * (n - 1) ** 2 / n
+    R1 = (-b + np.sqrt(b ** 2 - 4 * a * c)) / (2 * a)
+    #R1_ = (-b - np.sqrt(b ** 2 - 4 * a * c)) / (2 * a)
+    implied_f = get_focal_length(R1, -R1, d, n)
+    #implied_f_ = get_focal_length(R1_, -R1_, d, n)
+    print(f"R1={R1} yielded f={implied_f}")
+    #print(f"R1={R1_} yielded f={implied_f_}")
+    R2 = -R1
+    return make_lens(R1, R2, d, z_offset, material=material, external_material=vacuum)
+
+def test_lens_basic():
+    f = 1. # 1000mm
+    d = 0.01
+    z_offset = 0
+    make_lens_basic(f, d, z_offset)

@@ -29,7 +29,7 @@ from matplotlib.collections import LineCollection
 
 from common import *
 from geometry import Ray, Quadric, Plane, translation3f, point, vector, cross, ii, jj, kk, make_rotation_y, make_bound_vector
-from elements import SubElement, Compound, make_hyperboloid
+from elements import SubElement, Compound, make_hyperboloid, make_lens_basic
 
 inch = 0.0254
 mm = 1e-3
@@ -194,6 +194,7 @@ class Instrument():
                 #caught.append(None)
         return caught, pairs
 
+# TODO: Move to elements?
 def make_paraboloid(focal_length, material=None):
     """
     A parabolic reflect with back of the reflector at (0,0,0), with normal (0,0,1).
@@ -249,6 +250,21 @@ def make_newtonian(focal_length, aperture_radius, setback=0.):
     # is facing up.
     sensor = PlanarSensor(point(0,0,focal_length + setback), vector(1,0,0), vector(0,1,0))
     elements = Compound([aperture0, aperture1, reflector])
+    return Instrument(source, elements, sensor)
+
+def make_simple_refractor(focal_length, aperture_radius, d, setback=0.):
+    """Refractor with single lens
+
+    d is thickness of lens
+    """
+    # TODO: Check whether the value of d gives us a lens consistent with the aperture.
+    source = standard_source(d, aperture_radius)
+    # We'll think of the aperture as just slightly in front of the lens.
+    aperture = CircularAperture(point(0,0,0.75*d), vector(0,0,-aperture_radius))
+    sensor = PlanarSensor(point(0, 0, -focal_length - setback), vector(-1,0,0), vector(0,1,0))
+    z_offset = 0.
+    lens = make_lens_basic(focal_length, d, z_offset)
+    elements = Compound([aperture, lens])
     return Instrument(source, elements, sensor)
 
 def make_classical_cassegrain(focal_length, d, b, aperture_radius, setback=0.):
@@ -419,13 +435,20 @@ def ritchey_chretien_example(setback):
     b = d/2
     return make_ritchey_chretien(focal_length, d, b, aperture_radius, setback=setback), focal_length
 
+def simple_refractor_example(setback):
+    aperture_radius = 2 * inch # a 4" scope
+    focal_length = 1000 * mm
+    d = 1 * cm
+    return make_simple_refractor(focal_length, aperture_radius, d, setback=setback), focal_length
+
 # Nots: On classical cassegrain, caught1 has +/- 1e-5 in y direction, similar in x direction but coma-like
 def test0():
     #setback = 5 * mm # to see how it affects focus
     setback = 0 * mm
     #instrument, focal_length = newtonian_example(setback)
     #instrument, focal_length = classical_cassegrain_example(setback)
-    instrument, focal_length = ritchey_chretien_example(setback)
+    #instrument, focal_length = ritchey_chretien_example(setback)
+    instrument, focal_length = simple_refractor_example(setback)
 
     R0 = np.eye(4) # head on
     caught0, pairs0 = instrument.simulate(R0)

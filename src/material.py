@@ -56,6 +56,7 @@ bk7 = Sellmeier(np.array([1.03961212, 0.231792344, 1.01046945]),
 # If we want to be more accurate, this does depend on wavelength.
 # Could look at https://refractiveindex.info/
 air = Simple_refractor(1.000293)
+vacuum = Simple_refractor(1.)
 
 # This is boring for now because we don't have any other properties...
 class Reflector():

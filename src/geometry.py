@@ -363,7 +363,7 @@ def refract(v, grad, ior):
     n = grad / LA.norm(grad)
     # Do we want to negate n if its dot product with ell is positive?
     # Or do we assume things are set up so that this doesn't happen?
-    c = - (n.dot(l))
+    c = - (n.dot(ell))
     if c < 0:
         c = -c
         n = -n
