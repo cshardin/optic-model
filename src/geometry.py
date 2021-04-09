@@ -355,11 +355,13 @@ def refract(v, grad, ior):
         v: ray's velocity at intersection point
         grad: surface normal, not necessarily normalized
     """
+    debug=False
     # We follow notation of https://en.wikipedia.org/wiki/Snell%27s_law
-    n1 = LA.norm(v)
-    n2 = 1/ior
+    # Values of n1, n2 are ior, not velocities.
+    n1 = 1 / LA.norm(v)
+    n2 = ior
     r = n1 / n2
-    ell = v / n1
+    ell = v * n1
     n = grad / LA.norm(grad)
     # Do we want to negate n if its dot product with ell is positive?
     # Or do we assume things are set up so that this doesn't happen?
@@ -368,5 +370,7 @@ def refract(v, grad, ior):
         c = -c
         n = -n
     v_refract = r * ell + (r * c - np.sqrt(1 - r * r * (1 - c * c))) * n
-    return v_refract * n2
+    if debug:
+        print(f"refract: l={ell}, n={n}, v_refract={v_refract}, returning {v_refract*n2}; n1={n1}, n2={n2}; ||v_refract||={LA.norm(v_refract)}")
+    return v_refract / n2
 

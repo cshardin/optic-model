@@ -163,6 +163,8 @@ class PlanarSensor():
             y = ray_q[1]
             phase = ray.phase
             # Should we return a 4-vector rather than x,y?
+            if debug:
+                print(f"caught at point {x,y} with phase {phase}")
             return (x,y,phase)
 
 class Instrument():
@@ -490,7 +492,8 @@ def test1():
     setback = 0 * mm
     #instrument, focal_length = newtonian_example(setback)
     #instrument, focal_length = classical_cassegrain_example(setback)
-    instrument, focal_length = ritchey_chretien_example(setback)
+    #instrument, focal_length = ritchey_chretien_example(setback)
+    instrument, focal_length = simple_refractor_example(setback)
 
     R0 = np.eye(4) # head on
     caught0, pairs0 = instrument.simulate(R0)

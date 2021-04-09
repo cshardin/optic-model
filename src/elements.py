@@ -80,20 +80,21 @@ class SubElement():
 
 class Compound():
     """Just a bunch of elements sequentially"""
-    def __init__(self, elements):
+    def __init__(self, elements, comment=""):
         self.elements = elements
+        self.comment = comment
 
     def interact(self, ray):
         debug = True
         if debug:
-            print(f"interact got ray {ray.v_q}")
+            print(f"compound interact ({self.comment}) got ray {ray.v_q}")
         for index, elt in enumerate(self.elements):
             ray = elt.interact(ray)
             if debug:
                 if ray is not None:
-                    print(f"{index}: {ray.v_q}")
+                    print(f"{self.comment}{index}: {ray.v_q}")
                 else:
-                    print(f"{index}: {ray}")
+                    print(f"{self.comment}{index}: {ray}")
             if ray is None:
                 return None
         return ray
@@ -173,7 +174,7 @@ def make_lens(R1, R2, d, z_offset, material=None, external_material=None):
     # TODO: worry where the two surfaces meet and introduce appropriate clipping
     element1 = SubElement(sphere1, None, material=material)
     element2 = SubElement(sphere2, None, material=external_material)
-    return Compound([element1, element2])
+    return Compound([element1, element2], comment="lens")
 
 def get_focal_length(R1, R2, d, n):
     one_over_f = (n - 1) * (1/R1 - 1/R2 + (n-1)*d/(n * R1 * R2))
