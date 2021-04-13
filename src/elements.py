@@ -12,29 +12,21 @@ red = 650 * nm
 
 # TODO: Add fraction of light that is absorbed/transmitted.  For simplicity, that
 # will just be a constant; for now, that constant is implicitly 1 everywhere.
-# TODO: How should coming out the back of a lens work?  In particular, how does
-# it know what the IOR of the outside space is (unless we assume some
-# baseline)?  Should we actually think of it as not exiting a solid, but as
-# entering a different solid whose ior is the ior of the air?  That might seem silly
-# physically but I think it works well mathematically (although it means that
-# lenses have a direction--weird in general but not weird in the way we're modeling
-# these optical systems as having a prescribed order in which you hit stuff).
-# It will also work well for systems where two lenses are flush with each other
-# so you're exiting one element just as you're entering another; thinking of these
-# two lenses as being comprised of 3 SubElements (the front of the first lens,
-# the interface between the two lenses, and the back of the second lens) works
-# well; what would the "inside" of that second SubElement be otherwise?
-# I think the material should be the material we are going /to/, and the
-# incoming ray should already have a speed based on the medium it is in.
-# (Rays should know their own speed so that we track phase correctly.)
 class SubElement():
-    """A SubElement might be a reflector, or *one* side of a lens."""
+    """A SubElement might be a reflector, or *one* side of a lens.
+
+    A SubElement knows what material *comes next*.  So, the front of a lens
+    is an element whose associated material is glass, while the back of a lens
+    is an element whose associated material is air.
+    """
     def __init__(self, geometry, clip=None, material=None):
         """
         Args:
             geometry: the actual geometry of the surface (e.g., the sphere it's a part of)
             clip: something with an `inside` method that can be used to test whether a
-             proposed intersection point actually hits this object.
+             proposed intersection point actually hits this object.  (A ray that does
+             not hit is lost--it is assumed to be absorbed by something or to have
+             left the instrument.)
             ior: index of refraction (None for a reflector)
         """
         self.geometry = geometry
