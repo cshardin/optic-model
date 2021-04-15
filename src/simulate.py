@@ -35,7 +35,7 @@ inch = 0.0254
 mm = 1e-3
 cm = 1e-2
 
-class CircularAperture():
+class CircularAperture:
     def __init__(self, q, v):
         """q is location, v is normal, with length giving radius"""
         self.q = q
@@ -52,7 +52,7 @@ class CircularAperture():
         # TODO: implement properly; for now we just never absorb
         return ray
 
-class CircularSource():
+class CircularSource:
     def __init__(self, T, radius):
         """A circular source; T is transformation matrix (that will be applied to rays starting near
         origin in xy-plane headed in direction of z axis)"""

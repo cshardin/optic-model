@@ -73,7 +73,7 @@ def make_rotation_y(theta):
 
 # TODO: Maybe BoundVector should be called Ray, and what is currently
 # Ray should become PhasedRay or something like that.
-class BoundVector():
+class BoundVector:
     """A bound vector: a point in R^3 paired with a direction.  I.e., an element of the
     tangent bundle of R^3"""
     # TODO: v_q is so ugly.
@@ -91,7 +91,7 @@ def make_bound_vector(q, v):
     return BoundVector(v_q)
 
 # TODO: Pull a lot of what's in Ray into BoundVector and have Ray derive BoundVector.
-class Ray():
+class Ray:
     def __init__(self, v_q, phase, annotations):
         """q is starting position [x; y; z; 1], v is direction
         [dx; dy; dz; 0], r = v_q is [v, q], phase is a kind of "distance traveled
@@ -101,8 +101,8 @@ class Ray():
         `annotations` is a list of objects with arbitrary meaning.  This list
         may get modified.
 
-        I think length of v will be speed of light in current medium.
-        (This will be used in refraction calculations.)
+        The norm of v is speed of light in current medium. (This is used in
+        refraction calculations.)
 
         TODO: Add variable for how much has been absorbed so far.  For now reflections/tranmissions
         are perfect.
@@ -148,6 +148,22 @@ class Ray():
         M[0,1] = dt
         v_q = self.v_q.dot(M) # basically, add t*v to q
         return self.__class__(v_q, self.phase + dt, self.annotations)
+
+class RayBundle:
+    """A RayBundle is a Ray with additional local information about how certain perturbations
+    of that ray would be affected.
+
+    Rather than doing any calculus, we'll just implement this as multiple rays.
+
+    For now, we just perturb the starting position of the ray, rather than direction.
+    """
+    def __init__(self, T, epsilon):
+        """T is transformation that gives starting position of ray.  It is applied to a RayBundle
+        that starts at origin and points in the direction (0,0,-1).
+        """
+        # TODO: implement
+        # self.rays = np.zeros(1, 4, 2):
+        pass
 
 def solve_quadratic(a, b, c, which):
     """Solve a quadratic a t^2 + b t + c = 0.
