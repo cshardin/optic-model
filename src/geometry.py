@@ -193,7 +193,7 @@ def solve_quadratic(a, b, c, which):
 # Let's say that a geometric object only needs to know how to compute intersections
 # and surface normals. Things like reflection or refraction should be separate
 # or in a parent module.
-class OrientedSurface():
+class OrientedSurface:
     """An OrientedSurface is something for which you can:
     - Compute intersection with a ray
     - Get a surface normal at a point on the surface

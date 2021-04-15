@@ -16,7 +16,7 @@ focal length for green.
 """
 import numpy as np
 
-class Sellmeier():
+class Sellmeier:
     """For materials whose ior as function of wavelength is described by the Sellmeier
     equation."""
     def __init__(self, b, c):
@@ -34,7 +34,7 @@ class Sellmeier():
         n2 = 1 + lambda2 * (self.b / (lambda2 - self.c)).sum()
         return np.sqrt(n2)
 
-class Simple_refractor():
+class Simple_refractor:
     """Material with constant ior"""
     def __init__(self, ior):
         self.is_reflector = False
@@ -59,7 +59,7 @@ air = Simple_refractor(1.000293)
 vacuum = Simple_refractor(1.)
 
 # This is boring for now because we don't have any other properties...
-class Reflector():
+class Reflector:
     def __init__(self):
         self.is_reflector = True
 

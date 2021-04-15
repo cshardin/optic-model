@@ -97,7 +97,7 @@ class CircularSource:
             print(f"first few ray points = {[ ray.q() for ray in rays[:3]]}")
         return rays, pairs
 
-class LinearSource():
+class LinearSource:
     def __init__(self, radius, z):
         """A simple source, not very configurable; always points down, and
         all rays have y=0.
@@ -115,7 +115,7 @@ class LinearSource():
         pairs = [(k,k+1) for k in range(num_rays-1)]
         return rays, pairs
 
-class PlanarSensor():
+class PlanarSensor:
     def __init__(self, q, x_dir, y_dir):
         """A flat sensor (like a camera sensor).  Doesn't have finite extent.
         x_dir and y_dir should be unit vectors.
@@ -167,7 +167,7 @@ class PlanarSensor():
                 print(f"caught at point {x,y} with phase {phase}")
             return (x,y,phase)
 
-class Instrument():
+class Instrument:
     """An optical device: a sequence of reflectors and lenses or other elements"""
     # TODO: change name of elements to a singular, like element_group
     def __init__(self, source, elements, sensor):

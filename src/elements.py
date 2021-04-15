@@ -12,7 +12,7 @@ red = 650 * nm
 
 # TODO: Add fraction of light that is absorbed/transmitted.  For simplicity, that
 # will just be a constant; for now, that constant is implicitly 1 everywhere.
-class SubElement():
+class SubElement:
     """A SubElement might be a reflector, or *one* side of a lens.
 
     A SubElement knows what material *comes next*.  So, the front of a lens
@@ -70,7 +70,7 @@ class SubElement():
         new_v_q = np.stack([new_v, new_q], axis=1)
         return Ray(new_v_q, phase, ray.annotations)
 
-class Compound():
+class Compound:
     """Just a bunch of elements sequentially"""
     def __init__(self, elements, comment=""):
         self.elements = elements
