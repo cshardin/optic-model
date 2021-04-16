@@ -2,13 +2,8 @@
 
 import numpy as np
 from geometry import reflect, refract, Ray, Quadric, Plane, translation3f, make_bound_vector, point, vector
+from common import *
 from material import *
-
-nm = 1e-9
-
-blue = 450 * nm
-green = 550 * nm
-red = 650 * nm
 
 # TODO: Add fraction of light that is absorbed/transmitted.  For simplicity, that
 # will just be a constant; for now, that constant is implicitly 1 everywhere.
@@ -63,12 +58,12 @@ class SubElement:
         if self.material.is_reflector:
             new_v = reflect(v, grad)
         else:
-            # For now, we just do green photons.
-            ior = self.material.get_ior(green)
+            wavelength = ray.wavelength
+            ior = self.material.get_ior(wavelength)
             new_v = refract(v, grad, ior)
         assert new_v[3] == 0., f"bad reflection/refraction {new_v} (not vector-like); v={v}; grad={grad}"
         new_v_q = np.stack([new_v, new_q], axis=1)
-        return Ray(new_v_q, phase, ray.annotations)
+        return ray.with_v_q_and_phase(new_v_q, phase)
 
 class Compound:
     """Just a bunch of elements sequentially"""

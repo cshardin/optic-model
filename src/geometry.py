@@ -5,11 +5,6 @@ Basic geometry
 The boundary between geometry and everything else is admittedly a little fuzzy.
 """
 
-# TODO: Figure out what to do in doc comments about the following issue.
-# It's standard in Python doc comments to *end* with a list of the arguments.
-# But often I want to be able to refer to those when describing what the function
-# does...
-
 from __future__ import print_function, division # in case used from python2
 
 import numpy as np
@@ -71,6 +66,8 @@ def make_rotation_y(theta):
     s = np.sin(theta)
     return np.array([[c, 0, s, 0], [0, 1, 0, 0], [-s, 0, c, 0], [0, 0, 0, 1]])
 
+# TODO: Should BoundVector derive ndarray?  For some functions that logically take a
+# BoundVector, I want to be able to pass what we are calling v_q.
 # TODO: Maybe BoundVector should be called Ray, and what is currently
 # Ray should become PhasedRay or something like that.
 class BoundVector:
@@ -90,9 +87,12 @@ def make_bound_vector(q, v):
     v_q = np.stack([v, q], axis=1)
     return BoundVector(v_q)
 
-# TODO: Pull a lot of what's in Ray into BoundVector and have Ray derive BoundVector.
+# You might think we should get rid of phase and just modify v_q.  However, even if that
+# doesn't contribute meaningful cancellation error (I don't know if it does), it makes
+# it harder to interpret debug output or to draw the path that a photon followed.
+# TODO: Pull a lot of what's in Ray into BoundVector and have Ray derive BoundVector?
 class Ray:
-    def __init__(self, v_q, phase, annotations):
+    def __init__(self, v_q, phase, wavelength=green, annotations=[]):
         """q is starting position [x; y; z; 1], v is direction
         [dx; dy; dz; 0], r = v_q is [v, q], phase is a kind of "distance traveled
         so far" and more properly, time so far (so, phase increases
@@ -104,38 +104,30 @@ class Ray:
         The norm of v is speed of light in current medium. (This is used in
         refraction calculations.)
 
-        TODO: Add variable for how much has been absorbed so far.  For now reflections/tranmissions
+        Note that phase is measured in units of time and doesn't care about wavelength, so
+        it's not literally phase in a wave sense.  (Our units of time are a little
+        weird and very short: 1 unit of time is how long it takes a particle with velocity 1 to go
+        distance 1; for velocity, 1 means speed of light in air or vacuum (depends), and
+        for distance 1 means 1 meter.)
+
+        TODO: Add variable for how much has been absorbed so far?  For now reflections/tranmissions
         are perfect.
 
-        TODO: Add some higher-order information, namely, rather than a pointlike photon, we think
-        of it as a distorted infinitesimal disk (or even ellipsoid?) of photons, and a matrix that tells us
-        how the direction varies with displacement of starting point from nominal starting point (in
-        coordinates relative to the disk, so even as the size of the disk shrinks to zero it's not
-        necessary to make the matrix go to infinity).
-        E.g., with parabolic reflector, that little bundle is spread out over a little circle, and
-        that matrix is zero; after the on-axis reflection, it's still spread out over a little circle,
-        but the directions converge; where it reaches the focus, the radius of the disk is zero but
-        we have the same spread of directions.
-        To handle reflections of these bundles, we need 2nd order information about the surface.
-        Does this also need some kind of quadratic form that says how phase varies over the disk?
-        (E.g., after bouncing off the parabola, the little disk would be bent--but we don't want
-        to bend the disk; but we can project the photons back onto a flat disk and adjust
-        their phases.)  Or, maybe all that isn't worth the complexity--you can just trace an
-        actual bundle of photons to get an approximation of the same info.
         """
         assert v_q.shape == (4,2), f"bad v_q = {v_q}"
         self.v_q = v_q
         self.phase = phase
+        self.wavelength = wavelength
         self.annotations = annotations
 
     @classmethod
-    def of_q_v(cls, q, v):
+    def of_q_v(cls, q, v, wavelength=green):
         v_q = np.stack([v, q], axis=1)
-        return cls(v_q, 0., [])
+        return cls(v_q, 0., wavelength, [])
 
     def transform(self, M):
         assert M.shape == (4,4), f"bad M = {M}"
-        return self.__class__(M.dot(self.v_q), self.phase, self.annotations)
+        return self.__class__(M.dot(self.v_q), self.phase, self.wavelength, self.annotations)
 
     def q(self):
         return self.v_q[:,1]
@@ -147,8 +139,14 @@ class Ray:
         M = np.eye(2)
         M[0,1] = dt
         v_q = self.v_q.dot(M) # basically, add t*v to q
-        return self.__class__(v_q, self.phase + dt, self.annotations)
+        return self.__class__(v_q, self.phase + dt, self.wavelength, self.annotations)
 
+    def with_v_q_and_phase(self, v_q, phase):
+        return self.__class__(v_q, phase, self.wavelength, self.annotations)
+
+
+# TODO: After the rays have interacted with an element, t no longer has the same meaning for all
+# rays.  We need to consider phase as well (which is kind of like an offset to t).
 class RayBundle:
     """A RayBundle is like a Ray with additional local information about how certain perturbations
     of that ray would be affected.
@@ -166,23 +164,29 @@ class RayBundle:
         """M is transformation that gives starting position of ray.  It is applied to a RayBundle
         that starts at origin and points in the direction (0,0,-1).
         """
-        p = np.zeros(3,4,2)
-        # TODO: More perturbations.
+        num_rays = 3
+        p = np.zeros(num_rays,4,2)
+        # TODO: More perturbations.  Share code with CircularSource?  It's kind of similar.
         p[1,:,1] = np.array([-epsilon, 0., 0., 1.])
         p[2,:,1] = np.array([0., -epsilon, 0., 1.])
         basic_ray = np.array([[0., 0.],
                               [0., 0.],
                               [-1., 0.],
                               [0., 1.]])
-        rays = basic_ray + p
+        ray_positions = basic_ray + p
 
+        # Rather than put all the rays in a single tensor, we'll just have a list of
+        # vanilla rays because other code expects those.
+        rays = [Ray(ray_positions[i,:,:], 0., wavelength) for i in range(num_rays)]
         untransformed = cls(rays, p)
         return untransformed.transform(M)
 
     def transform(self, M):
         assert M.shape == (4,4), f"bad M = {M}"
 
-        return self.__class__(M @ self.rays, self.perturbations)
+        rays = [ray.transform(M) for ray in self.rays]
+
+        return self.__class__(rays, self.perturbations)
 
     def approx_focus(self):
         """We solve for t that would cause resulting points to be as close as possible
@@ -205,6 +209,9 @@ class RayBundle:
           aberration, astigmatism); if rays come with a color, and we perturb wavelength,
           then we could also get chromatic aberration.
         """
+        # TODO: This is broken in two ways:
+        # - self.rays is now a list of rays, not a tensor.
+        # - Need to consider phase; t doesn't mean same thing for different rays.
         rays = self.rays
         centroid_ray = rays.mean(axis=0)
         diffs_from_centroid = rays - cenroid_ray
