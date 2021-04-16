@@ -6,11 +6,10 @@ This is a personal project meant to satisfy curiosity and is still in
 an early stage.  In particular, the "input" is changed by editing code,
 and the output is cryptic.
  
-Currently, it can model telescopes that are composed solely of reflectors
-where the reflectors are quadric surfaces (which includes spherical, parabolic,
+Currently, it can model telescopes that are composed solely of reflective
+and refractive elements described by quadric surfaces (which includes spherical, parabolic,
 hyperbolic, and elliptical, in particular).  It has models of Newtonian,
-classical Cassegrain, and Ritchey-Chrétien scopes.  Refractive elements are
-a next step.
+classical Cassegrain, and Ritchey-Chrétien scopes.
 
 The primary design goal is to help understand the various kinds of aberrations
 that different designs have.  In particular, the model is non-physical in that
@@ -28,6 +27,3 @@ The design is very similar to a ray tracer, except that:
  a scene, except that the scene is just a few infinitely distant point sources.
 - We care about certain things that a ray tracer doesn't care about, like the relative
  phase of the rays when they reach the sensor.
-
-
-

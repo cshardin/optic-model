@@ -150,20 +150,99 @@ class Ray:
         return self.__class__(v_q, self.phase + dt, self.annotations)
 
 class RayBundle:
-    """A RayBundle is a Ray with additional local information about how certain perturbations
+    """A RayBundle is like a Ray with additional local information about how certain perturbations
     of that ray would be affected.
 
     Rather than doing any calculus, we'll just implement this as multiple rays.
 
     For now, we just perturb the starting position of the ray, rather than direction.
     """
-    def __init__(self, T, epsilon):
-        """T is transformation that gives starting position of ray.  It is applied to a RayBundle
+    def __init__(self, rays, perturbations):
+        self.rays = rays
+        self.perturbations = perturbations
+
+    @classmethod
+    def of_transformation(cls, M, epsilon):
+        """M is transformation that gives starting position of ray.  It is applied to a RayBundle
         that starts at origin and points in the direction (0,0,-1).
         """
+        p = np.zeros(3,4,2)
+        # TODO: More perturbations.
+        p[1,:,1] = np.array([-epsilon, 0., 0., 1.])
+        p[2,:,1] = np.array([0., -epsilon, 0., 1.])
+        basic_ray = np.array([[0., 0.],
+                              [0., 0.],
+                              [-1., 0.],
+                              [0., 1.]])
+        rays = basic_ray + p
+
+        untransformed = cls(rays, p)
+        return untransformed.transform(M)
+
+    def transform(self, M):
+        assert M.shape == (4,4), f"bad M = {M}"
+
+        return self.__class__(M @ self.rays, self.perturbations)
+
+    def approx_focus(self):
+        """We solve for t that would cause resulting points to be as close as possible
+        to each other.  Then we take the centroid for that value of t.
+
+        The approach is that, for a given t, there is a sum of squared distances from
+        the centroid.  I think this will be a quadratic function of t, which we can
+        then minimize.
+
+        (This, in some sense, cares about rays being close in spacetime.  You could
+        imagine an alternative approach where each ray traces out a line, and we look
+        for the point in space whose sum of squared distances from these lines is as small
+        as possible.  This isn't hard either, since given a line, there's a quadratic
+        function that gives squared distance from it.)
+
+        Returns the approximate focal point, and dictionary with additional info:
+        - t
+        - rms (of distance of rays from that point at time t)
+        - possibly further information about kinds of aberration (coma, spherical
+          aberration, astigmatism); if rays come with a color, and we perturb wavelength,
+          then we could also get chromatic aberration.
+        """
+        rays = self.rays
+        centroid_ray = rays.mean(axis=0)
+        diffs_from_centroid = rays - cenroid_ray
+        # The following could also be done with einsum.
+        #accum = np.einsum('ijk,ijl->kl', diffs_from_centroid, diffs_from_centroid)
+        accum = np.zeros((2,2))
+        num_rays = diffs_from_centroid.shape[0]
+        for i in range(num_rays):
+            d = diffs_from_centroid[i,:,:]
+            accum += d.T.dot(d)
+        # [t;1]' * accum * [t;1] is the loss we want to minimize.
+        # a t^2 + b t + c has deriv 2 a t + b and (assuming a > 0)
+        # is minimized at t=-b/2a
+        a = accum[0,0]
+        b_over_2 = accum[0,1]
+        if a <= 0:
+            t = np.nan
+        else:
+            t = -b_over_2 / a
+        t1 = np.array([t, 1.])
+        approx_focus = centroid_ray.dot(t1)
+        rms = np.sqrt(np.einsum('i,ij,j', t1, accum, t1))
+        return approx_focus, { 't': t, 'rms': rms }
+
+    def approx_focal_length(self):
+        """If we assume the perturbations were just spatial, then how those perturbations
+        relate to differences in angle of the rays should give us information about the focal
+        length of whatever system the RayBundle went through.
+
+        (If perturbations weren't spatial, I think we can't do it.  E.g., suppose they
+        were perturbations of angle, and we find that a divergence of dtheta=0.01 became
+        a divergence of dtheta=-0.01.  There are no distance units there so no information
+        about distance.  But perhaps if we took into consideration positions of rays
+        and values of t...)
+        """
         # TODO: implement
-        # self.rays = np.zeros(1, 4, 2):
-        pass
+        assert False, "Not yet implemented"
+
 
 def solve_quadratic(a, b, c, which):
     """Solve a quadratic a t^2 + b t + c = 0.
