@@ -135,6 +135,12 @@ class Ray:
     def v(self):
         return self.v_q[:,0]
 
+    def zero_phase_v_q(self):
+        """The v_q that we'd have if we extrapolated backward to phase 0."""
+        M = np.eye(2)
+        M[0,1] = -self.phase
+        return self.v_q.dot(M)
+
     def advance_time(self, dt):
         M = np.eye(2)
         M[0,1] = dt
@@ -144,9 +150,72 @@ class Ray:
     def with_v_q_and_phase(self, v_q, phase):
         return self.__class__(v_q, phase, self.wavelength, self.annotations)
 
+class CircularSource:
+    def __init__(self, T, radius):
+        """A circular source; T is transformation matrix (that will be applied to rays starting near
+        origin in xy-plane headed in direction of z axis)"""
+        assert T.shape == (4,4), f"bad T = {T}"
+        self.T = T
+        self.radius = radius
 
-# TODO: After the rays have interacted with an element, t no longer has the same meaning for all
-# rays.  We need to consider phase as well (which is kind of like an offset to t).
+    def get_rays(self, pre_perturb, num_circles=3, resolution=6):
+        """Returns (rays, pairs).
+        pre_perturb is perturbation applied to rays before they are transformed by self's
+        transformation.
+        """
+        # Below, u,v,w will denote local right-handed axis system, with *w*
+        # pointing in direction of self.v
+        debug = True
+        radius = self.radius
+        M = self.T.dot(pre_perturb)
+        assert M.shape == (4,4), f"bad shape T={self.T}, pre_perturb={pre_perturb}"
+        rays = []
+        pairs = []
+        def emit(u,v):
+            ray = Ray.of_q_v(point(u,v,0), kk).transform(M)
+            if debug:
+                print(f"emitting {ray.v_q}")
+            rays.append(ray)
+        for i in range(0, num_circles+1):
+            rays_so_far = len(rays)
+            r = radius * (i / num_circles)
+            num_points = max(1, resolution * i)
+            for theta in np.arange(num_points) * (2 * np.pi / num_points):
+                emit(r * np.cos(theta), r * np.sin(theta))
+            for i in range(num_points):
+                pairs.append((rays_so_far + i, rays_so_far + (i + 1) % num_points))
+        # Add a couple more line segments...
+        if num_circles >= 1:
+            pairs.append((0,1))
+            # Let's say we have 1 point in center, 6 points around that, then 12 points
+            # around that; we want the 4th point of those 12; so it should have 1 + 6 + (12 / 4)
+            # points before it.
+            if num_circles >= 2:
+                pairs.append((0, 1 + resolution + (resolution // 2)))
+        if debug:
+            print(f"pairs={pairs}")
+            print(f"first few ray points = {[ ray.q() for ray in rays[:3]]}")
+        return rays, pairs
+
+class LinearSource:
+    def __init__(self, radius, z):
+        """A simple source, not very configurable; always points down, and
+        all rays have y=0.
+        """
+        self.radius = radius
+        self.z = z
+
+    def get_rays(self, pre_perturb):
+        # TODO: obey pre_perturb.
+        num_rays = 5 # Very low, since this is basically for debugging.
+        xs = np.linspace(-self.radius, self.radius, num_rays)
+        rays = [Ray.of_q_v(point(x, 0, self.z), -kk) for x in xs]
+        for ray in rays:
+            print(f"emitting ray {ray.v_q}")
+        pairs = [(k,k+1) for k in range(num_rays-1)]
+        return rays, pairs
+
+
 class RayBundle:
     """A RayBundle is like a Ray with additional local information about how certain perturbations
     of that ray would be affected.
@@ -156,36 +225,68 @@ class RayBundle:
     For now, we just perturb the starting position of the ray, rather than direction.
     """
     def __init__(self, rays, perturbations):
+        """rays is a list of Rays; perturbations is an n x 4 x 2 tensor."""
         self.rays = rays
         self.perturbations = perturbations
 
+    # @classmethod
+    # def of_transformation_bad(cls, M, epsilon, wavelength=green):
+    #     """M is transformation that gives starting position of ray.  It is applied to a RayBundle
+    #     that starts at origin and points in the direction (0,0,-1).
+    #     """
+    #     num_rays = 3
+    #     p = np.zeros((num_rays,4,2))
+    #     # TODO: More perturbations.  Share code with CircularSource?  It's kind of similar.
+    #     p[1,:,1] = np.array([-epsilon, 0., 0., 1.])
+    #     p[2,:,1] = np.array([0., -epsilon, 0., 1.])
+    #     basic_ray = np.array([[0., 0.],
+    #                           [0., 0.],
+    #                           [-1., 0.],
+    #                           [0., 1.]])
+    #     ray_positions = basic_ray + p
+
+    #     # Rather than put all the rays in a single tensor, we'll just have a list of
+    #     # vanilla rays because other code expects those.
+    #     rays = [Ray(ray_positions[i,:,:], 0., wavelength) for i in range(num_rays)]
+    #     untransformed = cls(rays, p)
+    #     return untransformed.transform(M)
+
+    # TODO: It's kind of awkward that in some places k is considered default direction for
+    # a ray to point while here it is -k.
     @classmethod
-    def of_transformation(cls, M, epsilon):
+    def of_transformation(cls, M, epsilon, wavelength=green):
         """M is transformation that gives starting position of ray.  It is applied to a RayBundle
         that starts at origin and points in the direction (0,0,-1).
         """
-        num_rays = 3
-        p = np.zeros(num_rays,4,2)
-        # TODO: More perturbations.  Share code with CircularSource?  It's kind of similar.
-        p[1,:,1] = np.array([-epsilon, 0., 0., 1.])
-        p[2,:,1] = np.array([0., -epsilon, 0., 1.])
-        basic_ray = np.array([[0., 0.],
-                              [0., 0.],
-                              [-1., 0.],
-                              [0., 1.]])
-        ray_positions = basic_ray + p
-
-        # Rather than put all the rays in a single tensor, we'll just have a list of
-        # vanilla rays because other code expects those.
-        rays = [Ray(ray_positions[i,:,:], 0., wavelength) for i in range(num_rays)]
-        untransformed = cls(rays, p)
-        return untransformed.transform(M)
+        # CircularSource points in direction k by default; we want -k.
+        rays, _pairs = CircularSource(np.diag([1,1,-1,1]), epsilon).get_rays(np.eye(4))
+        num_rays = len(rays)
+        perturbations = np.zeros((num_rays,4,2))
+        for i, ray in enumerate(rays):
+            perturbations[i] = ray.v_q
+        rays = [ ray.transform(M) for ray in self.rays ]
+        return cls(rays, perturbations)
 
     def transform(self, M):
         assert M.shape == (4,4), f"bad M = {M}"
 
         rays = [ray.transform(M) for ray in self.rays]
 
+        # TODO: It's currently moot, but maybe this should just be RayBundle rather than
+        # self.__class__.  Supposing hypothetically that we subclassed this, and called this
+        # method, would we want an element of the subclass?  On one hand it seems like we would;
+        # on the other hand, we don't know what arguments the subclass's constructor would take,
+        # so self.__class__(...) seems unsound without an explicit convention that subclasses
+        # must have constructors that take the same arguments.
+        return self.__class__(rays, self.perturbations)
+
+    def cointeract(self, element):
+        """element should have an interact method that expects a ray, and returns another ray
+        or None
+
+        This is kind of dual to interact--it is the element that is interacting with our rays.
+        """
+        rays = [ element.interact(ray) if ray is not None else None for ray in rays ]
         return self.__class__(rays, self.perturbations)
 
     def approx_focus(self):
@@ -212,9 +313,12 @@ class RayBundle:
         # TODO: This is broken in two ways:
         # - self.rays is now a list of rays, not a tensor.
         # - Need to consider phase; t doesn't mean same thing for different rays.
-        rays = self.rays
+        num_rays = len(self.rays)
+        rays = np.zeros((num_rays,4,2))
+        for i, ray in enumerate(self.rays):
+            rays[i,:,:] = ray.zero_phase_v_q()
         centroid_ray = rays.mean(axis=0)
-        diffs_from_centroid = rays - cenroid_ray
+        diffs_from_centroid = rays - centroid_ray
         # The following could also be done with einsum.
         #accum = np.einsum('ijk,ijl->kl', diffs_from_centroid, diffs_from_centroid)
         accum = np.zeros((2,2))

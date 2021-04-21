@@ -28,7 +28,7 @@ from matplotlib.collections import LineCollection
 #import sys
 
 from common import *
-from geometry import Ray, Quadric, Plane, translation3f, point, vector, cross, ii, jj, kk, make_rotation_y, make_bound_vector
+from geometry import Ray, Quadric, Plane, translation3f, point, vector, cross, ii, jj, kk, make_rotation_y, make_bound_vector, CircularSource, LinearSource
 from elements import SubElement, Compound, make_hyperboloid, make_lens_basic
 
 inch = 0.0254
@@ -51,69 +51,6 @@ class CircularAperture:
         # didn't bother to make the photon start farther back).
         # TODO: implement properly; for now we just never absorb
         return ray
-
-class CircularSource:
-    def __init__(self, T, radius):
-        """A circular source; T is transformation matrix (that will be applied to rays starting near
-        origin in xy-plane headed in direction of z axis)"""
-        assert T.shape == (4,4), f"bad T = {T}"
-        self.T = T
-        self.radius = radius
-
-    def get_rays(self, pre_perturb, num_circles=3, resolution=6):
-        """Returns (rays, pairs).
-        pre_perturb is perturbation applied to rays before they are transformed by self's
-        transformation.
-        """
-        # Below, u,v,w will denote local right-handed axis system, with *w*
-        # pointing in direction of self.v
-        debug = True
-        radius = self.radius
-        M = self.T.dot(pre_perturb)
-        assert M.shape == (4,4), f"bad shape T={self.T}, pre_perturb={pre_perturb}"
-        rays = []
-        pairs = []
-        def emit(u,v):
-            ray = Ray.of_q_v(point(u,v,0), kk).transform(M)
-            if debug:
-                print(f"emitting {ray.v_q}")
-            rays.append(ray)
-        for i in range(0, num_circles+1):
-            rays_so_far = len(rays)
-            r = radius * (i / num_circles)
-            num_points = max(1, resolution * i)
-            for theta in np.arange(num_points) * (2 * np.pi / num_points):
-                emit(r * np.cos(theta), r * np.sin(theta))
-            for i in range(num_points):
-                pairs.append((rays_so_far + i, rays_so_far + (i + 1) % num_points))
-        # Add a couple more line segments...
-        pairs.append((0,1))
-        # Let's say we have 1 point in center, 6 points around that, then 12 points
-        # around that; we want the 4th point of those 12; so it should have 1 + 6 + (12 / 4)
-        # points before it.
-        pairs.append((0, 1 + resolution + (resolution // 2)))
-        if debug:
-            print(f"pairs={pairs}")
-            print(f"first few ray points = {[ ray.q() for ray in rays[:3]]}")
-        return rays, pairs
-
-class LinearSource:
-    def __init__(self, radius, z):
-        """A simple source, not very configurable; always points down, and
-        all rays have y=0.
-        """
-        self.radius = radius
-        self.z = z
-
-    def get_rays(self, pre_perturb):
-        # TODO: obey pre_perturb.
-        num_rays = 5 # Very low, since this is basically for debugging.
-        xs = np.linspace(-self.radius, self.radius, num_rays)
-        rays = [Ray.of_q_v(point(x, 0, self.z), -kk) for x in xs]
-        for ray in rays:
-            print(f"emitting ray {ray.v_q}")
-        pairs = [(k,k+1) for k in range(num_rays-1)]
-        return rays, pairs
 
 class PlanarSensor:
     def __init__(self, q, x_dir, y_dir):
