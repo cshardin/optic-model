@@ -310,9 +310,6 @@ class RayBundle:
           aberration, astigmatism); if rays come with a color, and we perturb wavelength,
           then we could also get chromatic aberration.
         """
-        # TODO: This is broken in two ways:
-        # - self.rays is now a list of rays, not a tensor.
-        # - Need to consider phase; t doesn't mean same thing for different rays.
         num_rays = len(self.rays)
         rays = np.zeros((num_rays,4,2))
         for i, ray in enumerate(self.rays):
