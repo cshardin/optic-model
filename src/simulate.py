@@ -286,9 +286,8 @@ def make_classical_cassegrain(focal_length, d, b, aperture_radius, setback=0.):
 # just create the nominal scope, and then have a method of Instrument that
 # lets us move the sensor.  One mild awkwardness is we have a hack to avoid
 # introducing the secondary reflector in the Newtonian which leads to an
-# ad hoc interpretation of setback.
-# TODO: I think this is buggy; I'm getting really screwy results where
-# rays are missing the detector.
+# ad hoc interpretation of setback.  But that's okay: the instrument has a sensor,
+# so we can just move the sensor after the fact.
 def make_ritchey_chretien(focal_length, D, b, aperture_radius, setback=0.):
     """Ritchey-Chrétien
 
@@ -381,13 +380,13 @@ def simple_refractor_example(setback):
     return make_simple_refractor(focal_length, aperture_radius, d, setback=setback), focal_length
 
 # Nots: On classical cassegrain, caught1 has +/- 1e-5 in y direction, similar in x direction but coma-like
-def test0():
+def test0(do_ray_bundles=True):
     #setback = 5 * mm # to see how it affects focus
     setback = 0 * mm
     #instrument, focal_length = newtonian_example(setback)
-    #instrument, focal_length = classical_cassegrain_example(setback)
+    instrument, focal_length = classical_cassegrain_example(setback)
     #instrument, focal_length = ritchey_chretien_example(setback)
-    instrument, focal_length = simple_refractor_example(setback)
+    #instrument, focal_length = simple_refractor_example(setback)
 
     R0 = np.eye(4) # head on
     caught0, pairs0 = instrument.simulate(R0)
@@ -423,6 +422,31 @@ def test0():
         print(caught0)
         print(caught1)
         print(caught2)
+    if do_ray_bundles:
+        radius_scale = 0.1 # how much the source's radius gets scaled by when producing RayBundle
+        x = []
+        z = []
+
+        for bundle_index, R in enumerate([R0, R1, R2]):
+            raybundle = instrument.source.get_raybundle(R, radius_scale)
+            raybundle_ = raybundle.cointeract(instrument.elements)
+            focus, info = raybundle_.approx_focus()
+            x.append(focus[0])
+            z.append(focus[2])
+            print(f"raybundle {bundle_index} focus: {focus}, {info}")
+        x = np.array(x)
+        z = np.array(z)
+        plt.plot(x,z)
+        plt.title("field curvature")
+        plt.xlabel("x")
+        plt.ylabel("z")
+        plt.show()
+
+        V = np.vander(x ** 2)
+        # We won't worry about singular matrices.
+        coeffs = LA.solve(V, z)
+        print(f"z = {coeffs[2]} + {coeffs[1]}x^2 + {coeffs[0]}x^4")
+
 
 def test1():
     #setback = 5 * mm # to see how it affects focus
