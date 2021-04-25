@@ -384,9 +384,9 @@ def test0(do_ray_bundles=True):
     #setback = 5 * mm # to see how it affects focus
     setback = 0 * mm
     #instrument, focal_length = newtonian_example(setback)
-    instrument, focal_length = classical_cassegrain_example(setback)
+    #instrument, focal_length = classical_cassegrain_example(setback)
     #instrument, focal_length = ritchey_chretien_example(setback)
-    #instrument, focal_length = simple_refractor_example(setback)
+    instrument, focal_length = simple_refractor_example(setback)
 
     R0 = np.eye(4) # head on
     caught0, pairs0 = instrument.simulate(R0)
@@ -426,6 +426,7 @@ def test0(do_ray_bundles=True):
         radius_scale = 0.1 # how much the source's radius gets scaled by when producing RayBundle
         x = []
         z = []
+        approx_focal_lengths = []
 
         for bundle_index, R in enumerate([R0, R1, R2]):
             raybundle = instrument.source.get_raybundle(R, radius_scale)
@@ -433,7 +434,9 @@ def test0(do_ray_bundles=True):
             focus, info = raybundle_.approx_focus()
             x.append(focus[0])
             z.append(focus[2])
-            print(f"raybundle {bundle_index} focus: {focus}, {info}")
+            approx_focal_length = raybundle_.approx_focal_length()
+            approx_focal_lengths.append(approx_focal_length)
+            print(f"raybundle {bundle_index} focus: {focus}, {info}; focal length {approx_focal_length}")
         x = np.array(x)
         z = np.array(z)
         plt.plot(x,z)
@@ -446,6 +449,8 @@ def test0(do_ray_bundles=True):
         # We won't worry about singular matrices.
         coeffs = LA.solve(V, z)
         print(f"z = {coeffs[2]} + {coeffs[1]}x^2 + {coeffs[0]}x^4")
+
+
 
 
 def test1():

@@ -66,6 +66,9 @@ def make_rotation_y(theta):
     s = np.sin(theta)
     return np.array([[c, 0, s, 0], [0, 1, 0, 0], [-s, 0, c, 0], [0, 0, 0, 1]])
 
+def normalize(v):
+    return v / LA.norm(v)
+
 # TODO: Should BoundVector derive ndarray?  For some functions that logically take a
 # BoundVector, I want to be able to pass what we are calling v_q.
 # TODO: Maybe BoundVector should be called Ray, and what is currently
@@ -157,9 +160,15 @@ class RayBundle:
     Rather than doing any calculus, we'll just implement this as multiple rays.
 
     For now, we just perturb the starting position of the ray, rather than direction.
+
+    The perturbations are as if the original ray is pointed in direction of *positive* z-axis.
     """
     def __init__(self, rays, perturbations):
-        """rays is a list of Rays; perturbations is an n x 4 x 2 tensor."""
+        """rays is a list of Rays; perturbations is an n x 4 x 2 tensor.
+
+        The first ray is assumed to be the "primary" ray; in particular, perturbations[0,:,:]
+        should be zero.
+        """
         self.rays = rays
         self.perturbations = perturbations
 
@@ -269,8 +278,24 @@ class RayBundle:
         about distance.  But perhaps if we took into consideration positions of rays
         and values of t...)
         """
-        # TODO: implement
-        assert False, "Not yet implemented"
+        num_rays = len(self.rays)
+        dr = np.zeros(num_rays)
+        tan_dtheta = np.zeros(num_rays)
+        # We don't assume things are unit vectors here, because medium might not be vacuum
+        # at focus.
+        primary_direction = normalize(self.rays[0].v())
+        for i in range(num_rays):
+            # We only use x,y coordinates of the perturbation.
+            dr[i] = LA.norm(self.perturbations[i,:2,1])
+            v = normalize(self.rays[i].v())
+            cos_dtheta = v.dot(primary_direction)
+            # cos_dtheta sometimes slightly > 1 due to roundoff error.
+            assert cos_dtheta < 1 + 1e-12
+            cos_dtheta = min(1., cos_dtheta)
+            tan_dtheta[i] = np.sqrt(1 - cos_dtheta ** 2) / cos_dtheta
+        # Now, regress dr against tan_dtheta.  Slope is focal length
+        focal_length = dr.dot(tan_dtheta) / tan_dtheta.dot(tan_dtheta)
+        return focal_length
 
 
 class CircularSource:
@@ -326,15 +351,19 @@ class CircularSource:
     def get_raybundle(self, pre_perturb, radius_scale, wavelength=green):
         """Like get_rays, but as a ray bundle, and radius is scaled by epsilon.
         """
-        # CircularSource points in direction k by default; we want -k.
-        rays, _pairs = self.with_new_radius(self.radius * radius_scale).get_rays(pre_perturb)
+        # A little annoyingly, if we call get_rays directly, we'd need to undo T and pre_perturb
+        # to get the perturbations.  So, we get rays for identity, read perturbations
+        # off of those, then transform the rays.
+        clean_self = CircularSource(np.eye(4), self.radius * radius_scale)
+        rays, _pairs = clean_self.get_rays(np.eye(4))
+        # These rays point in direction kk.
+
         num_rays = len(rays)
-        # TODO: Using CircularSource.get_rays is clean, but we don't see what the original
-        # perturbations relative to center are.
         perturbations = np.zeros((num_rays,4,2))
         for i, ray in enumerate(rays):
             perturbations[i] = ray.v_q
-        #rays = [ ray.transform(M) for ray in rays ]
+        M = self.T.dot(pre_perturb)
+        rays = [ ray.transform(M) for ray in rays ]
         return RayBundle(rays, perturbations)
 
 

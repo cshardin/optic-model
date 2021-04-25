@@ -8,7 +8,7 @@ and the output is cryptic.
  
 Currently, it can model telescopes that are composed solely of reflective
 and refractive elements described by quadric surfaces (which includes spherical, parabolic,
-hyperbolic, and elliptical, in particular).  It has models of Newtonian,
+hyperbolic, and elliptical, in particular).  It has models of refractor, Newtonian,
 classical Cassegrain, and Ritchey-Chrétien scopes.
 
 The primary design goal is to help understand the various kinds of aberrations
@@ -27,3 +27,6 @@ The design is very similar to a ray tracer, except that:
  a scene, except that the scene is just a few infinitely distant point sources.
 - We care about certain things that a ray tracer doesn't care about, like the relative
  phase of the rays when they reach the sensor.
+ 
+In addition to tracing races through the system, we can do additional analysis like
+measuring focal length and field curvature.
