@@ -10,7 +10,7 @@ For consistency, distances are measured in meters throughout -- even wavelengths
 (Exception: Coefficients for the Sellmeier equation use squared microns because that's what
 you'll find in tables.)
 
-Instruments generally point in direction of positive z-axis.
+Instruments generally point in direction of positive z-axis.  We use right-handed coordinates.
 
 We use homogeneous coordinates (x,y,z,w) and the usual way of using 4x4 matrices for transformations
 (as in OpenGL, for instance).  There might be places where we do some tricks that interpret this as
@@ -53,18 +53,58 @@ class CircularAperture:
         return ray
 
 class PlanarSensor:
-    def __init__(self, q, x_dir, y_dir):
-        """A flat sensor (like a camera sensor).  Doesn't have finite extent.
-        x_dir and y_dir should be unit vectors.
+    """
+    A flat sensor (like a camera sensor).  Doesn't have finite extent.
+
+    You probably want to call PlanarSensor.of_q_x_y to construct.
+    """
+    # TODO: Reverse the convention for x_dir or y_dir.  We want it to be such that if you "took
+    # a picture" of a set of x and y axes using the scope, then they'd look like x and y axes
+    # in the picture.  So, for a pinhole camera, x_dir should be (-1, 0, 0) while y_dir should
+    # be (0, -1, 0).  (Note: It's easy to get this backwards in your head.  Perhaps think of it
+    # this way: if you are standing out on the positive z-axis, looking in the direction of
+    # the negative z-axis--i.e., you are looking at the telescope and the telescope is looking
+    # at you--the x- and y-axes look to you like they would as you normally draw
+    # them on paper.  The image you seen projected onto the sensor will be upside down and
+    # backwards.  Note that if you actually took a picture with this instrument, and drew
+    # with x- and y- as you ordinarily draw these axes, the picture will be a mirror image.)
+    # We also want to be able to infer which way the sensor is facing from x_dir and y_dir;
+    # for a design with a single reflector (and no shenanigans like the mirror being trough-shaped
+    # so that it "inverts" on one axis but not the other), this means flipping sign of the direction
+    # it's facing.  What's really going on is that in such cases, the M-matrix we are forming
+    # should have determinant -1.  I think we should add a boolean `flip` argument that says
+    # that x_dir x y_dir needs to be flipped to get the direction the sensor is facing.
+    # (In principle we really want the user to specify an orthogonal set of axes.  But it's
+    # simpler for caller to just take in x and y and a sign for z = +/- x cross y.)
+
+    def __init__(self, M):
+        """
+        M is that matrix that moves xyz axis to where sensor is.  In the resulting object,
+        M_inv is the matrix that transforms a ray into the sensor's coordinate system.
         """
         debug = True
-        z_dir = cross(x_dir, y_dir)
-        M = np.stack([x_dir, y_dir, z_dir, q], axis=1)
         M_inv = LA.inv(M) # should be numerically stable
         self.M = M # in case we need to, say, draw a little picture of the sensor
         self.M_inv = M_inv # the thing we actually work with in most calculations
         if debug:
             print(f"made sensor M={self.M}, M_inv={self.M_inv}")
+
+    @staticmethod
+    def of_q_x_y(q, x_dir, y_dir, flip_z=False):
+        """
+        x_dir and y_dir should be orthogonal unit vectors unless you're doing something
+        unusual (in which case you're on your own).  z_dir = x_dir x y_dir by default,
+        but this is negated if flip_z=True.  z_dir is the direction the sensor is facing.
+        """
+        sign = -1 if flip_z else 1
+        z_dir = sign * cross(x_dir, y_dir)
+        M = np.stack([x_dir, y_dir, z_dir, q], axis=1)
+        return PlanarSensor(M)
+
+    def setback(self, offset):
+        """Positive offset means move sensor back (away from the direction its pointing)"""
+        M = self.M.dot(translation3f(0, 0, -offset))
+        return PlanarSensor(M)
 
     def catch(self, ray):
         """Return point in sensor's coordinate system where ray hits, and the ray's phase.
@@ -111,6 +151,10 @@ class Instrument:
         self.source = source
         self.elements = elements
         self.sensor = sensor
+
+    def setback_sensor(self, setback):
+        """A positive setback means move sensor away from the direction it is pointed."""
+        return Instrument(self.source, self.elements, self.sensor.setback(setback))
 
     def simulate(self, R):
         """Simulate rays from the source, if it is rotated according to R."""
@@ -187,7 +231,7 @@ def make_newtonian(focal_length, aperture_radius, setback=0.):
     reflector = make_paraboloid(focal_length)
     # In practice there would be another mirror.  So we actually pretend the sensor
     # is facing up.
-    sensor = PlanarSensor(point(0,0,focal_length + setback), vector(1,0,0), vector(0,1,0))
+    sensor = PlanarSensor.of_q_x_y(point(0,0,focal_length + setback), -ii, -jj, flip_z=True)
     elements = Compound([aperture0, aperture1, reflector])
     return Instrument(source, elements, sensor)
 
@@ -200,7 +244,7 @@ def make_simple_refractor(focal_length, aperture_radius, d, setback=0.):
     source = standard_source(d, aperture_radius)
     # We'll think of the aperture as just slightly in front of the lens.
     aperture = CircularAperture(point(0,0,0.75*d), vector(0,0,-aperture_radius))
-    sensor = PlanarSensor(point(0, 0, -focal_length - setback), vector(-1,0,0), vector(0,1,0))
+    sensor = PlanarSensor.of_q_x_y(point(0, 0, -focal_length - setback), -ii, -jj)
     z_offset = 0.
     lens = make_lens_basic(focal_length, d, z_offset)
     elements = Compound([aperture, lens])
@@ -279,15 +323,13 @@ def make_classical_cassegrain(focal_length, d, b, aperture_radius, setback=0.):
     #source = standard_source(focal_length, aperture_radius)
     source = standard_source(d, aperture_radius)
     elements = Compound([aperture0, aperture1, primary, secondary])
-    sensor = PlanarSensor(point(0,0,-b - setback), vector(1,0,0), vector(0,1,0))
+    sensor = PlanarSensor.of_q_x_y(point(0,0,-b - setback), vector(1,0,0), vector(0,1,0))
     return Instrument(source, elements, sensor)
 
 # TODO: I don't like setback being an argument to these functions.  We should
 # just create the nominal scope, and then have a method of Instrument that
-# lets us move the sensor.  One mild awkwardness is we have a hack to avoid
-# introducing the secondary reflector in the Newtonian which leads to an
-# ad hoc interpretation of setback.  But that's okay: the instrument has a sensor,
-# so we can just move the sensor after the fact.
+# lets us move the sensor.  setback_sensor is now implemented, so this should
+# be a simple change now.
 def make_ritchey_chretien(focal_length, D, b, aperture_radius, setback=0.):
     """Ritchey-Chrétien
 
@@ -331,7 +373,7 @@ def make_ritchey_chretien(focal_length, D, b, aperture_radius, setback=0.):
     #source = standard_source(focal_length, aperture_radius)
     source = standard_source(D, aperture_radius)
     elements = Compound([aperture0, aperture1, primary, secondary])
-    sensor = PlanarSensor(point(0,0,-b - setback), vector(1,0,0), vector(0,1,0))
+    sensor = PlanarSensor.of_q_x_y(point(0,0,-b - setback), -ii, -jj)
     return Instrument(source, elements, sensor)
 
 def make_maksutov():
@@ -383,10 +425,11 @@ def simple_refractor_example(setback):
 def test0(do_ray_bundles=True):
     #setback = 5 * mm # to see how it affects focus
     setback = 0 * mm
-    #instrument, focal_length = newtonian_example(setback)
-    #instrument, focal_length = classical_cassegrain_example(setback)
-    #instrument, focal_length = ritchey_chretien_example(setback)
-    instrument, focal_length = simple_refractor_example(setback)
+    # setback = -0.2 + 1.99826723e-01 # closest to raybundle 1's focus.
+    instrument, focal_length = newtonian_example(setback)
+    # instrument, focal_length = classical_cassegrain_example(setback)
+    # instrument, focal_length = ritchey_chretien_example(setback)
+    # instrument, focal_length = simple_refractor_example(setback)
 
     R0 = np.eye(4) # head on
     caught0, pairs0 = instrument.simulate(R0)
@@ -456,9 +499,9 @@ def test0(do_ray_bundles=True):
 def test1():
     #setback = 5 * mm # to see how it affects focus
     setback = 0 * mm
-    #instrument, focal_length = newtonian_example(setback)
-    #instrument, focal_length = classical_cassegrain_example(setback)
-    #instrument, focal_length = ritchey_chretien_example(setback)
+    # instrument, focal_length = newtonian_example(setback)
+    # instrument, focal_length = classical_cassegrain_example(setback)
+    # instrument, focal_length = ritchey_chretien_example(setback)
     instrument, focal_length = simple_refractor_example(setback)
 
     R0 = np.eye(4) # head on

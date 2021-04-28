@@ -61,7 +61,8 @@ def cross(u, v):
     return vector3v(np.cross(u[:-1], v[:-1]))
 
 def make_rotation_y(theta):
-    """Rotation by theta radians about y-axis"""
+    """Rotation by theta radians about y-axis (with usual convention; e.g., a small angle
+    will convert positive x to slightly negative z, and positive z to slightly positive x)"""
     c = np.cos(theta)
     s = np.sin(theta)
     return np.array([[c, 0, s, 0], [0, 1, 0, 0], [-s, 0, c, 0], [0, 0, 0, 1]])
