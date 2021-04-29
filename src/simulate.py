@@ -29,7 +29,7 @@ from matplotlib.collections import LineCollection
 
 from common import *
 from geometry import Ray, Quadric, Plane, translation3f, point, vector, cross, ii, jj, kk, make_rotation_y, make_bound_vector, CircularSource, LinearSource
-from elements import SubElement, Compound, make_hyperboloid, make_lens_basic
+from elements import SubElement, Compound, make_conic, make_lens_basic, make_lens
 
 inch = 0.0254
 mm = 1e-3
@@ -353,10 +353,10 @@ def make_ritchey_chretien(focal_length, D, b, aperture_radius):
     K2 = -1 - (2 / (M - 1) ** 3) * (M * (2 * M - 1) + B/D)
 
     print(f"primary: trying to make hyperboloid with radius {-R1} conic constant {K1} at z=0")
-    primary = make_hyperboloid(-R1, K1, 0)
+    primary = make_conic(-R1, K1, 0)
     print(f"primary: {primary}")
     print(f"secondary: trying to make hyperboloid with radius {-R2} conic constant {K2} at z={D}")
-    secondary = make_hyperboloid(-R2, K2, D, reverse_normal=True)
+    secondary = make_conic(-R2, K2, D, reverse_normal=True)
     print(f"secondary: {secondary}")
     aperture0 = CircularAperture(point(0,0,D), vector(0,0,-aperture_radius))
     # The rule we used for the parabolic should still be approximately correct here.
@@ -369,11 +369,44 @@ def make_ritchey_chretien(focal_length, D, b, aperture_radius):
     sensor = PlanarSensor.of_q_x_y(point(0,0,-b), -ii, -jj)
     return Instrument(source, elements, sensor)
 
-def make_maksutov():
-    """Maksutov
+def make_gregory_maksutov(aperture_radius, R1, R2, R3, d, ell, b, lens_material=None):
+    """Gregory-Maksutov
+
+    The sign conventions are such that, typically, all parameters below are positive.
+    In particular, for the radii of curvature, positive means concave towards positive
+    z-axis.
+
+    R1 - radius of curvature of front of lens
+    R2 - radius of curvature of back of lens (which is also secondary reflector)
+    R3 - radius of curvature of primary reflector
+    d - thickness of lens on axis
+    ell - distance between primary and secondary reflector
+    b - backfocus from primary to sensor
+    lens_material - self explanatory; BK7 by default
+
     """
+    if aperture_radius > max(R1, R2, R3):
+        raise ValueError("aperture radius must not exceed any radius of curvature")
     # See https://www.cfht.hawaii.edu/~baril/Maksutov/Maksutov.html
-    assert False, "Not yet implemented"
+    # We'll have primary reflector intersect z-axis at z=0.  I'm not sure if that's
+    # the convention we want.
+    lens_z_offset = d/2 + ell
+    lens = make_lens(-R1, -R2, d, lens_z_offset, material=lens_material)
+    # make primary and secondary...
+    primary = make_conic(R3, 0., 0.)
+    secondary = make_conic(R2, 0., ell)
+
+    # How much farther forward is the rim of the lens from where its front meets
+    # z-axis?
+    front_depth = R1 - np.sqrt(R1 ** 2 - aperture_radius ** 2)
+    # TODO: also include an aperture at primary reflector?
+    front_z_coordinate = ell + d + front_depth
+    aperture0 = CircularAperture(point(0,0,front_z_coordinate), vector(0,0,-aperture_radius))
+
+    source = standard_source(front_z_coordinate, aperture_radius)
+    elements = Compound([aperture0, lens, primary, secondary])
+    sensor = PlanarSensor.of_q_x_y(point(0,0,-b), -ii, -jj)
+    return Instrument(source, elements, sensor)
 
 def plot_segments(ax, points, pairs):
     use_lines = False
@@ -408,6 +441,20 @@ def ritchey_chretien_example():
     b = d/2
     return make_ritchey_chretien(focal_length, d, b, aperture_radius), focal_length
 
+def maksutov_example():
+    # Numbers here are mostly just made up.
+    # See https://www.telescope-optics.net/maksutov_corrector_radii.htm
+    # for choice of R1 = 0.94 * R2.
+    aperture_radius = 4 * inch
+    R2 = 36 * inch
+    R1 = 0.94 * R2
+    R3 = 30 * inch
+    d = 0.25 * inch
+    ell = 12 * inch
+    b = 1 * inch
+    focal_length = 1000 * mm # not really, just making this up
+    return make_gregory_maksutov(aperture_radius, R1, R2, R3, d, ell, b), focal_length
+
 def simple_refractor_example():
     aperture_radius = 2 * inch # a 4" scope
     focal_length = 1000 * mm
@@ -422,6 +469,7 @@ def test0(do_ray_bundles=True):
     # instrument, focal_length = newtonian_example()
     # instrument, focal_length = classical_cassegrain_example()
     instrument, focal_length = ritchey_chretien_example()
+    # instrument, focal_length = maksutov_example()
     # instrument, focal_length = simple_refractor_example()
 
     instrument = instrument.setback_sensor(setback)

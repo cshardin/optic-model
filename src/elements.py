@@ -22,7 +22,7 @@ class SubElement:
              proposed intersection point actually hits this object.  (A ray that does
              not hit is lost--it is assumed to be absorbed by something or to have
              left the instrument.)
-            ior: index of refraction (None for a reflector)
+            material: what material the element is made of (default: reflector)
         """
         self.geometry = geometry
         self.clip = clip
@@ -86,12 +86,11 @@ class Compound:
                 return None
         return ray
 
-# TODO: Should make_paraboloid and make_hyperboloid be class functions of Quadric?  No, because
-# Quadric represents the entire conic and has no material.
-# TODO: Does the following just do the right thing for other conics, not just
-# hyperboloids?  If so, change name to make_conic?
+# You might think make_paraboloid and make_hyperboloid should class functions of Quadric, but
+# note that Quadric represents the entire conic and has no material.
+# TODO: I think make_conic does the right thing for all conics, not just hyperboloids.  Verify.
 # TODO: Our convention for using normals to determine which surface you hit is kind of annoying...
-def make_hyperboloid(R, K, z_offset, material=None, reverse_normal=False):
+def make_conic(R, K, z_offset, material=None, reverse_normal=False):
     """
     See https://en.wikipedia.org/wiki/Conic_constant
 
@@ -103,8 +102,14 @@ def make_hyperboloid(R, K, z_offset, material=None, reverse_normal=False):
 
     Args:
         R: radius of curvature; use R > 0 for concave "up" (direction of positive z-axis) while R < 0
-        is concave "down"
-        K: conic constant, should be < -1 for hyperboloids
+         is concave "down"
+        K: conic constant; should be < -1 for hyperboloids, -1 for paraboloids, > -1 for ellipses
+         (including 0 for spheres).  The relationship with eccentricity e is K = -e^2 (when
+         K <= 0).
+        z_offset: z-coordinate where the surface intersects z-axis
+        material: mostly self explanatory; None means reflector
+        reverse_normal: If true, surface points in direction of negative z-axis rather than
+         positive z-axis
     """
     M = np.diag([1, 1, (K+1), 0])
     M[2,3] = -R
@@ -112,7 +117,7 @@ def make_hyperboloid(R, K, z_offset, material=None, reverse_normal=False):
     # For either sign of R, we want the convention that gradient points up at origin.
     # That gradient is (0,0,-R).
     # When R < 0, we already have that.
-    # For R > 0, we need to negate M to get that
+    # For R > 0, we need to negate M to get that.
     if R > 0:
         M *= -1
     if reverse_normal:
@@ -127,7 +132,6 @@ def make_hyperboloid(R, K, z_offset, material=None, reverse_normal=False):
     else:
         clip_z = z_offset + 1e-6
         clip = Plane(make_bound_vector(point(0, 0, clip_z), vector(0, 0, 1)))
-    # TODO: emulate ocaml's ?foo:bar (i.e., don't override default if value is None)
     return SubElement(geometry, clip, material=material)
 
 def make_lens(R1, R2, d, z_offset, material=None, external_material=None):
